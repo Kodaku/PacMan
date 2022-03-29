@@ -9,56 +9,54 @@ public class Ghost : BaseGameEntity
     protected PacMan target;
     protected Vector2 m_scatterPoint;
     protected StateMachine<Ghost> stateMachine;
-    protected Distances m_distances;
-    protected List<Vector2> pathToDestination = new List<Vector2>();
-    protected Cell m_currentCell;
-    protected Vector2 nextDestination;
-    protected MyGrid m_grid;
-    protected Animator animator;
-    protected Rigidbody2D rb;
-    private bool m_isBlue = false;
     private float blueTimer = 40.0f;
     private float currentBlueTimer = 0.0f;
-    public GameObject debugSymbol;
+    protected Dictionary<PathFinderType, GhostPathFinder> pathFinders = new Dictionary<PathFinderType, GhostPathFinder>();
+    protected Dictionary<MovementType, GhostMovement> ghostMovements = new Dictionary<MovementType, GhostMovement>();
+    private GhostPathFinder currentPathFinder;
+    private GhostAnimator ghostAnimator;
     // Start is called before the first frame update
-    public virtual void Initialize(int id)
+    public virtual void Initialize(MyGrid grid)
+    {
+        InitializePathFinders(grid);
+        InitializeStateMachine();
+        InitializeAnimator();
+        InitializeMovements();
+
+        target = GameObject.FindGameObjectWithTag("Player").GetComponent<PacMan>();
+    }
+
+    private void InitializeStateMachine()
     {
         stateMachine = new StateMachine<Ghost>(this);
-        m_ID = id;
         stateMachine.currentState = Scatter.Instance;
         stateMachine.currentState.Enter(this);
-        animator = GetComponent<Animator>();
-        rb = GetComponent<Rigidbody2D>();
-        target = GameObject.FindGameObjectWithTag("Player").GetComponent<PacMan>();
+    }
+
+    public virtual void InitializePathFinders(MyGrid grid)
+    {
+        pathFinders.Add(PathFinderType.SCATTER, new ScatterPathFinder(grid));
+        pathFinders.Add(PathFinderType.ESCAPE, new EscapePathFinder(grid));
+        pathFinders.Add(PathFinderType.SCATTER_FRIGHTENED, new ScatterFrightenedPathFinder(grid));
+    }
+
+    private void InitializeAnimator()
+    {
+        ghostAnimator = new GhostAnimator(this);
+    }
+
+    private void InitializeMovements()
+    {
+        ghostMovements.Add(MovementType.SCATTER, new ScatterMovement(speed));
+        ghostMovements.Add(MovementType.SCATTER_FRIGHTENED, new ScatterFrightenedMovement(speed));
+        ghostMovements.Add(MovementType.ESCAPE, new EscapeMovement(speed));
+        ghostMovements.Add(MovementType.CHASE, new ChaseMovement(speed));
     }
 
     public Vector2 scatterPoint
     {
         get { return m_scatterPoint; }
         set { m_scatterPoint = value; }
-    }
-
-    public Distances distances
-    {
-        get { return m_distances; }
-        set { m_distances = value; }
-    }
-
-    public Cell currentCell
-    {
-        get { return m_currentCell; }
-        set { m_currentCell = value; }
-    }
-
-    public MyGrid grid
-    {
-        set { m_grid = value; }
-    }
-
-    public bool isBlue
-    {
-        get { return m_isBlue; }
-        set { m_isBlue = value; }
     }
 
     public virtual void ChangeState(State<Ghost> newState)
@@ -71,210 +69,134 @@ public class Ghost : BaseGameEntity
         return stateMachine.HandleMessage(telegram);
     }
 
-    public virtual void FindPathToScatterPoint()
+    public void FindPath(PathFinderType pathFinderType)
     {
-        pathToDestination.Clear();
-        m_currentCell = m_grid.WorldPointToCell(transform.position);
-        Distances distances = m_currentCell.Distances;
-        m_distances = distances.PathToGoal(m_grid.WorldPointToCell(scatterPoint));
-        foreach(Cell cell in m_distances.Cells())
+        currentPathFinder = pathFinders[pathFinderType];
+        Vector2 destination = Vector2.zero;
+        switch(pathFinderType)
         {
-            // Instantiate(debugSymbol, new Vector2(cell.column, cell.row), Quaternion.identity);
-            Vector2 position = new Vector2(cell.column, cell.row);
-            pathToDestination.Add(position);
+            case PathFinderType.SCATTER : case PathFinderType.SCATTER_FRIGHTENED:
+            {
+                destination = m_scatterPoint;
+                break;
+            }
+            case PathFinderType.ESCAPE:
+            {
+                destination = transform.position;
+                break;
+            }
+            case PathFinderType.CHASE:
+            {
+                destination = target.transform.position;
+                break;
+            }
         }
-        pathToDestination.Reverse();
-        nextDestination = pathToDestination[0];
-        pathToDestination.Remove(nextDestination);
-        if(pathToDestination.Count > 0)
-        {
-            pathToDestination.Remove(pathToDestination[pathToDestination.Count - 1]);
-        }
+        currentPathFinder.FindPathToPoint(this, destination);
     }
 
-    public virtual void FindPathToEscapePoint()
+    public void DecideNextState(StateType stateType)
     {
-        pathToDestination.Clear();
-        m_currentCell = m_grid.WorldPointToCell(transform.position);
-        Vector2 escapePosition = transform.position;
-        Distances distances = m_currentCell.Distances;
-        int choice = Random.Range(0, 4);
-        switch(choice)
+        switch(stateType)
         {
-            case 0:
+            case StateType.SCATTER:
             {
-                escapePosition.x += 5.0f;
+                ChangeState(Scatter.Instance);
                 break;
             }
-            case 1:
+            case StateType.CHASE:
             {
-                escapePosition.x -= 5.0f;
+                ChangeState(Chase.Instance);
                 break;
             }
-            case 2:
+            case StateType.SCATTER_FRIGHTENED:
             {
-                escapePosition.y += 5.0f;
+                ChangeState(ScatterFrightened.Instance);
                 break;
             }
-            case 3:
+            case StateType.FRIGHTENED:
             {
-                escapePosition.y -= 5.0f;
+                ChangeState(Frightened.Instance);
                 break;
             }
         }
-        escapePosition.x = Mathf.Clamp(escapePosition.x, 0.0f, m_grid.columns - 1);
-        escapePosition.y = Mathf.Clamp(escapePosition.y, 0.0f, m_grid.rows - 1);
-        // print(escapePosition);
-        m_distances = distances.PathToGoal(m_grid.WorldPointToCell(escapePosition));
-        foreach(Cell cell in m_distances.Cells())
-        {
-            // Instantiate(debugSymbol, new Vector2(cell.column, cell.row), Quaternion.identity);
-            Vector2 position = new Vector2(cell.column, cell.row);
-            pathToDestination.Add(position);
-        }
-        pathToDestination.Reverse();
-        nextDestination = pathToDestination[0];
-        pathToDestination.Remove(nextDestination);
-        if(pathToDestination.Count > 0)
-        {
-            pathToDestination.Remove(pathToDestination[pathToDestination.Count - 1]);
-        }
-    }
-
-    public virtual void FindPathToTarget()
-    {
-        m_currentCell = m_grid.WorldPointToCell(transform.position);
     }
 
     public virtual void MoveScatter()
     {
-        Vector2 playerPosition = transform.position;
-        if(Vector2.Distance(playerPosition, nextDestination) <= 0.1f)
-        {
-            if(pathToDestination.Count > 0)
-            {
-                nextDestination = pathToDestination[0];
-                pathToDestination.Remove(nextDestination);
-                Vector2 direction = (nextDestination - playerPosition).normalized;
-                PlayAnimation(direction);
-            }
-            else if(!m_isBlue)
-            {
-                ChangeState(Chase.Instance);
-            }
-            else
-            {
-                ChangeState(Frightened.Instance);
-            }
-        }
-        else
-        {
-            Vector2 direction = (nextDestination - playerPosition).normalized;
-            playerPosition.x += direction.x * speed * Time.deltaTime;
-            playerPosition.y += direction.y * speed * Time.deltaTime;
-            transform.position = playerPosition;
-        }
+        ghostMovements[MovementType.SCATTER].Move(this);
+    }
+
+    public virtual void MoveScatterFrightened()
+    {
+        ghostMovements[MovementType.SCATTER_FRIGHTENED].Move(this);
     }
 
     public virtual void MoveChase()
     {
-        Vector2 playerPosition = transform.position;
-        if(Vector2.Distance(playerPosition, nextDestination) <= 0.1f && !m_isBlue)
-        {
-            Vector2 direction = (nextDestination - playerPosition).normalized;
-            PlayAnimation(direction);
-            FindPathToTarget();
-        }
-        else if(!m_isBlue)
-        {
-            Vector2 direction = (nextDestination - playerPosition).normalized;
-            playerPosition.x += direction.x * speed * Time.deltaTime;
-            playerPosition.y += direction.y * speed * Time.deltaTime;
-            transform.position = playerPosition;
-        }
-        else
-        {
-            ChangeState(Frightened.Instance);
-        }
+        ghostMovements[MovementType.CHASE].Move(this);
     }
 
     public virtual void MoveFrightened()
     {
-        Vector2 playerPosition = transform.position;
-        if(Vector2.Distance(playerPosition, nextDestination) <= 0.1f)
-        {
-            if(pathToDestination.Count > 0)
-            {
-                nextDestination = pathToDestination[0];
-                pathToDestination.Remove(nextDestination);
-                Vector2 direction = (nextDestination - playerPosition).normalized;
-                PlayAnimation(direction);
-            }
-            else if(!m_isBlue)
-            {
-                ChangeState(Chase.Instance);
-            }
-            else
-            {
-                FindPathToEscapePoint();
-            }
-        }
-        else
-        {
-            Vector2 direction = (nextDestination - playerPosition).normalized;
-            playerPosition.x += direction.x * speed * Time.deltaTime;
-            playerPosition.y += direction.y * speed * Time.deltaTime;
-            transform.position = playerPosition;
-        }
+        ghostMovements[MovementType.ESCAPE].Move(this);
     }
 
-    private void PlayAnimation(Vector2 direction)
+    public void PlayAnimation(Vector2 playerPosition)
     {
-        if(Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-        {
-            if(direction.x > 0.0f)
-            {
-                animator.SetTrigger("Right");
-            }
-            else if(direction.x < 0.0f)
-            {
-                animator.SetTrigger("Left");
-            }
-        }
-        else if(Mathf.Abs(direction.y) > Mathf.Abs(direction.x))
-        {
-            if(direction.y > 0.0f)
-            {
-                animator.SetTrigger("Up");
-            }
-            else if(direction.y < 0.0f)
-            {
-                animator.SetTrigger("Down");
-            }
-        }
+        Vector2 direction = (GetNextDestination() - playerPosition).normalized;
+        ghostAnimator.PlayAnimation(direction);
+    }
+
+    public Vector2 GetNextDestination()
+    {
+        return currentPathFinder.nextDestination;
+    }
+
+    public bool IsCurrentPathFinderEmpty()
+    {
+        return currentPathFinder.IsEmpty();
+    }
+
+    public void DecideNextDestination(Vector2 playerPosition)
+    {
+        currentPathFinder.SetNextDestinationFromPath();
+        PlayAnimation(playerPosition);
     }
 
     public void GoBlue()
     {
         currentBlueTimer = 0.0f;
-        m_isBlue = true;
-        animator.SetTrigger("GoBlue");
+        ghostAnimator.GoBlue();
         gameObject.tag = "BlueGhost";
-        ChangeState(Scatter.Instance);
+        DecideNextState(StateType.SCATTER_FRIGHTENED);
+    }
+
+    private void OnTriggerEnter2D(Collider2D collider)
+    {
+        if(collider.gameObject.CompareTag("Player") && !gameObject.CompareTag("BlueGhost"))
+        {
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.PACMAN, MessageType.KILL_PAC_MAN);
+        }
+    }
+
+    public void IncreaseFrightenedTimer()
+    {
+        currentBlueTimer += Time.deltaTime;
+    }
+
+    public void CheckFrightenedEnd()
+    {
+        if(currentBlueTimer >= blueTimer)
+        {
+            gameObject.tag = "Ghost";
+            ghostAnimator.GoNormal();
+            DecideNextState(StateType.CHASE);
+        }
     }
 
     public override void Update()
     {
         base.Update();
         stateMachine.Update();
-        if(m_isBlue)
-            currentBlueTimer += Time.deltaTime;
-        if(m_isBlue && currentBlueTimer >= blueTimer)
-        {
-            gameObject.tag = "Ghost";
-            m_isBlue = false;
-            animator.SetTrigger("GoNormal");
-            ChangeState(Chase.Instance);
-        }
     }
 }

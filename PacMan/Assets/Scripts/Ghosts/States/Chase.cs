@@ -24,7 +24,7 @@ public class Chase : State<Ghost>
     }
     public override void Enter(Ghost ghost)
     {
-        ghost.FindPathToTarget();
+        ghost.FindPath(PathFinderType.CHASE);
     }
 
     public override void Execute(Ghost ghost)
@@ -40,7 +40,7 @@ public class Chase : State<Ghost>
 
     public override bool OnMessage(Ghost ghost, Telegram telegram)
     {
-        print("Received " + telegram.messageType);
+        // print("Received " + telegram.messageType);
         ghost.GoBlue();
         return true;
     }

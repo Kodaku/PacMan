@@ -4,45 +4,20 @@ using UnityEngine;
 
 public class Pinky : Ghost
 {
-    public override void Initialize(int id)
+    public override void Initialize(MyGrid grid)
     {
-        base.Initialize(id);
-        EntityManager.RegisterEntity(this);
+        base.Initialize(grid);
     }
 
-    public override void FindPathToScatterPoint()
+    public override void InitializePathFinders(MyGrid grid)
     {
-        base.FindPathToScatterPoint();
+        base.InitializePathFinders(grid);
+        pathFinders.Add(PathFinderType.CHASE, new PinkyTarget(grid));
     }
 
     public override void MoveScatter()
     {
         base.MoveScatter();
-    }
-
-    public override void FindPathToTarget()
-    {
-        base.FindPathToTarget();
-        Distances distances = m_currentCell.Distances;
-        int choice = Random.Range(0, 1);
-        Vector2 targetPosition = target.transform.position;
-        if(choice == 0)
-        {
-            targetPosition.y += 4.0f;
-        }
-        else
-        {
-            targetPosition.x -= 4.0f;
-        }
-        targetPosition.x = Mathf.Clamp(targetPosition.x, 0.0f, m_grid.columns - 1);
-        targetPosition.y = Mathf.Clamp(targetPosition.y, 0.0f, m_grid.rows - 1);
-        m_distances = distances.PathToGoal(m_grid.WorldPointToCell(targetPosition));
-        List<Cell> cells = m_distances.Cells();
-        if(cells.Count > 0)
-        {
-            cells.Reverse();
-            nextDestination = new Vector2(cells[0].column, cells[0].row);
-        }
     }
 
     public override void Update()

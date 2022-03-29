@@ -49,4 +49,10 @@ public class Telegram
         get { return m_currentTime; }
         set { m_currentTime = value; }
     }
+
+    public string extraInfo
+    {
+        get { return m_extraInfo; }
+        set { m_extraInfo = value; }
+    }
 }

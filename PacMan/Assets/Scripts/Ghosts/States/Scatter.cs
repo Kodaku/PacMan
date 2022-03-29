@@ -24,7 +24,7 @@ public class Scatter : State<Ghost>
     }
     public override void Enter(Ghost ghost)
     {
-        ghost.FindPathToScatterPoint();
+        ghost.FindPath(PathFinderType.SCATTER);
     }
 
     public override void Execute(Ghost ghost)
@@ -39,7 +39,7 @@ public class Scatter : State<Ghost>
 
     public override bool OnMessage(Ghost ghost, Telegram telegram)
     {
-        print("Received " + telegram.messageType);
+        // print("Received " + telegram.messageType);
         ghost.GoBlue();
         return true;
     }

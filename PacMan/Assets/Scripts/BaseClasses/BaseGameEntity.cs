@@ -18,6 +18,12 @@ public class BaseGameEntity : MonoBehaviour
         
     }
 
+    public virtual void RegisterEntity(int id)
+    {
+        m_ID = id;
+        EntityManager.RegisterEntity(this);
+    }
+
     public virtual bool HandleMessage(Telegram telegram)
     {
         return false;

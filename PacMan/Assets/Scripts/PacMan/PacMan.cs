@@ -9,14 +9,29 @@ public class PacMan : BaseGameEntity
     private Animator animator;
     private Rigidbody2D rb;
     // Start is called before the first frame update
-    public void Initialize(int id)
+    public void Initialize()
     {
+        animator = GetComponent<Animator>();
         stateMachine = new StateMachine<PacMan>(this);
-        m_ID = id;
         stateMachine.currentState = Wander.Instance;
         stateMachine.currentState.Enter(this);
-        animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody2D>();
+    }
+
+    public override bool HandleMessage(Telegram telegram)
+    {
+        return stateMachine.HandleMessage(telegram);
+    }
+
+    public void ChangeState(State<PacMan> newState)
+    {
+        stateMachine.ChangeState(newState);
+    }
+
+    public void Reset()
+    {
+        transform.position = Vector2.zero;
+        animator.Play("Right");
     }
 
     public void Move()
@@ -60,24 +75,41 @@ public class PacMan : BaseGameEntity
         rb.velocity = new Vector2(speed * horizontalMovement, speed * verticalMovement);
     }
 
+    public void Die()
+    {
+        rb.velocity = Vector2.zero;
+        animator.Play("PacManDeath");
+    }
+
+    public void NotifyDeath()
+    {
+        MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.PAC_MAN_DEATH);
+    }
+
     private void OnTriggerEnter2D(Collider2D collider)
     {
         if(collider.gameObject.CompareTag("Breadcrumb"))
         {
             Destroy(collider.gameObject);
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.INCREASE_SCORE, "1");
         }
         else if(collider.gameObject.CompareTag("SpecialBreadcrumb"))
         {
             Destroy(collider.gameObject);
-            GameObject[] ghosts = GameObject.FindGameObjectsWithTag("Ghost");
-            foreach(GameObject ghost in ghosts)
-            {
-                MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, ghost.GetComponent<Ghost>().ID, MessageType.GO_BLUE);
-            }
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GHOST, MessageType.GO_BLUE);
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.INCREASE_SCORE, "10");
         }
         else if(collider.gameObject.CompareTag("BlueGhost"))
         {
             Destroy(collider.gameObject);
+            EntityManager.DeleteEntity(collider.gameObject.GetComponent<BaseGameEntity>());
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.GHOST_DESTROYED);
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.INCREASE_SCORE, "200");
+        }
+        else if(collider.gameObject.CompareTag("Cherry"))
+        {
+            Destroy(collider.gameObject);
+            MessageDispatcher.Instance.DispatchMessage(0.0f, m_ID, (int)Entities.GAME_MANAGER, MessageType.INCREASE_SCORE, "100");
         }
     }
 

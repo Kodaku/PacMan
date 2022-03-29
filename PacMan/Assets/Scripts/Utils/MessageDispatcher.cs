@@ -26,17 +26,19 @@ public class MessageDispatcher : MonoBehaviour
     
     private void Discharge(BaseGameEntity entity, Telegram telegram)
     {
+        // print(telegram.messageType);
         entity.HandleMessage(telegram);
     }
 
     public void DispatchMessage(float delay, int senderID, int receiverID, MessageType messageType, string extraInfo = "")
     {
-        BaseGameEntity entity = EntityManager.GetEntityByID(receiverID);
+        List<BaseGameEntity> entities = EntityManager.GetEntityByID(receiverID);
         Telegram telegram = new Telegram(0.0f, senderID, receiverID, messageType, extraInfo:extraInfo);
 
         if(delay <= 0.0f)
         {
-            Discharge(entity, telegram);
+            foreach(BaseGameEntity entity in entities)
+                Discharge(entity, telegram);
         }
         else
         {
@@ -47,8 +49,9 @@ public class MessageDispatcher : MonoBehaviour
 
     private void DispatchDelayedMessage(Telegram telegram)
     {
-        BaseGameEntity entity = EntityManager.GetEntityByID(telegram.receiverID);
-        Discharge(entity, telegram);
+        List<BaseGameEntity> entities = EntityManager.GetEntityByID(telegram.receiverID);
+        foreach(BaseGameEntity entity in entities)
+            Discharge(entity, telegram);
         messageList.Remove(telegram);
     }
 

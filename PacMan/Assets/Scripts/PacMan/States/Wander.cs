@@ -20,7 +20,7 @@ public class Wander : State<PacMan>
     }
     public override void Enter(PacMan pacMan)
     {
-        
+        pacMan.Reset();
     }
 
     public override void Execute(PacMan pacMan)
@@ -35,6 +35,14 @@ public class Wander : State<PacMan>
 
     public override bool OnMessage(PacMan pacMan, Telegram telegram)
     {
-        return false;
+        switch(telegram.messageType)
+        {
+            case MessageType.KILL_PAC_MAN:
+            {
+                pacMan.ChangeState(Dead.Instance);
+                break;
+            }
+        }
+        return true;
     }
 }
